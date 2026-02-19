@@ -2,8 +2,19 @@ import os
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 from breeze_connect import BreezeConnect
+from fastapi.middleware.cors import CORSMiddleware
+
 
 app = FastAPI(title="Breeze Tiny Endpoint")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # Simple shared-secret protection
 APP_TOKEN = os.environ.get("APP_TOKEN", "")
