@@ -45,17 +45,39 @@ def get_breeze():
 def health():
     return {"ok": True}
 
+
 @app.post("/quote")
 def quote(req: QuoteRequest, x_app_token: str | None = Header(default=None, alias="X-APP-TOKEN")):
     require_auth(x_app_token)
     breeze = get_breeze()
 
-    # Cash market quote (NSE/BSE)
     resp = breeze.get_quotes(
         stock_code=req.stock_code,
         exchange_code=req.exchange_code,
         product_type="cash"
     )
 
-    return {"status": "ok", "data": resp}
+    rows = resp.get("Success") or []
+    if not rows:
+        return {"status": "error", "error": resp}
+
+    r = rows[0]  # first row
+
+    # Return a stable, flat schema for Google Sheets
+    quote = {
+        "exchange": req.exchange_code,
+        "symbol": req.stock_code,
+
+        # These keys depend on Breeze payload; we'll map what exists safely
+        "ltp": r.get("ltp") or r.get("LTP") or r.get("last_traded_price"),
+        "open": r.get("open") or r.get("OPEN"),
+        "high": r.get("high") or r.get("HIGH"),
+        "low": r.get("low") or r.get("LOW"),
+        "prev_close": r.get("previous_close") or r.get("prev_close") or r.get("CLOSE"),
+
+        "volume": r.get("volume") or r.get("VOLUME"),
+        "ltt": r.get("ltt") or r.get("LTT") or r.get("last_traded_time"),
+    }
+
+    return {"status": "ok", "quote": quote, "raw": r}
 
