@@ -48,15 +48,14 @@ def health():
 @app.post("/quote")
 def quote(req: QuoteRequest, x_app_token: str | None = Header(default=None, alias="X-APP-TOKEN")):
     require_auth(x_app_token)
+    breeze = get_breeze()
 
-    # For now this is a stub; we’ll replace it with the exact Breeze call once deploy works.
-    _ = get_breeze()
+    # Cash market quote (NSE/BSE)
+    resp = breeze.get_quotes(
+        stock_code=req.stock_code,
+        exchange_code=req.exchange_code,
+        product_type="cash"
+    )
 
-    return {
-        "status": "ok",
-        "data": {
-            "exchange_code": req.exchange_code,
-            "stock_code": req.stock_code,
-            "note": "stub - will be replaced with real Breeze response"
-        }
-    }
+    return {"status": "ok", "data": resp}
+
