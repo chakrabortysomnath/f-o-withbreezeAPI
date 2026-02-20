@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from breeze_connect import BreezeConnect
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
-
+from datetime import datetime, timedelta, timezone
 
 
 
@@ -113,6 +113,44 @@ def _get_latest_nse_contract_url():
     # Pick the latest by date in filename
     latest_name = sorted(matches)[-1]
     return f"https://nsearchives.nseindia.com/content/fo/{latest_name}"
+
+from datetime import datetime, timedelta, timezone
+
+def _get_latest_nse_contract_url():
+    """
+    Robustly find the latest NSE F&O contract file by probing recent dates directly.
+    Falls back to env var NSE_FO_CONTRACT_URL if set.
+    """
+    forced = os.environ.get("NSE_FO_CONTRACT_URL", "").strip()
+    if forced:
+      return forced
+
+    sess = _nse_session()
+
+    # NSE often expects a homepage hit first (cookies)
+    try:
+        sess.get("https://www.nseindia.com", timeout=10)
+    except Exception:
+        pass
+
+    # Try recent dates (today backwards)
+    today = datetime.now(timezone.utc).date()
+    for i in range(0, 15):  # last 15 days
+        d = today - timedelta(days=i)
+        ddmmyyyy = d.strftime("%d%m%Y")
+        url = f"https://nsearchives.nseindia.com/content/fo/NSE_FO_contract_{ddmmyyyy}.csv.gz"
+
+        try:
+            r = sess.get(url, timeout=10, allow_redirects=True)
+            # some NSE responses return html on error; require gzip-ish content
+            ctype = (r.headers.get("Content-Type") or "").lower()
+            if r.status_code == 200 and (".gz" in url) and (("gzip" in ctype) or ("octet-stream" in ctype) or len(r.content) > 100):
+                return url
+        except Exception:
+            continue
+
+    raise RuntimeError("Could not locate NSE_FO_contract file in last 15 days")
+
 
 def _normalize_symbol(sym: str) -> str:
     return (sym or "").strip().upper()
