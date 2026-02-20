@@ -7,6 +7,7 @@ from typing import Optional
 
 
 
+
 app = FastAPI(title="Breeze Tiny Endpoint")
 
 app.add_middleware(
@@ -25,7 +26,6 @@ APP_TOKEN = os.environ.get("APP_TOKEN", "")
 BREEZE_API_KEY = os.environ.get("BREEZE_API_KEY", "")
 BREEZE_API_SECRET = os.environ.get("BREEZE_API_SECRET", "")
 BREEZE_SESSION_TOKEN = os.environ.get("BREEZE_SESSION_TOKEN", "")
-
 
 
 class StrikeListRequest(BaseModel):
@@ -138,15 +138,16 @@ def option_strikes(
     require_auth(x_app_token)
     breeze = get_breeze()
 
-    # Breeze option-chain usually accepts call/put (SDK examples use lower-case values in calls)
     right_in = (req.right or "").strip().lower()
     if right_in not in ("call", "put"):
         raise HTTPException(status_code=400, detail="right must be 'call' or 'put'")
 
-    # Try call/put first (matches your working /quote flow), and fallback to Call/Put if needed
     attempted = []
+    last_resp = None
+
     for right_val in [right_in, right_in.capitalize()]:
         attempted.append(right_val)
+
         resp = breeze.get_option_chain_quotes(
             stock_code=req.stock_code.strip().upper(),
             exchange_code=req.exchange_code.strip().upper(),
@@ -154,27 +155,41 @@ def option_strikes(
             right=right_val,
             expiry_date=req.expiry_date
         )
+        last_resp = resp
 
         rows = resp.get("Success") or []
         if rows:
             strikes = sorted({
                 float(r.get("strike_price"))
                 for r in rows
-                if r.get("strike_price") is not None
+                if r.get("strike_price") is not None and str(r.get("strike_price")).strip() != ""
             })
+
+            # Try to extract spot price from any row
+            spot = None
+            for r in rows:
+                s = r.get("spot_price")
+                if s is not None and str(s).strip() != "":
+                    try:
+                        spot = float(s)
+                        break
+                    except Exception:
+                        pass
+
             return {
                 "status": "ok",
                 "exchange": req.exchange_code.upper(),
                 "symbol": req.stock_code.upper(),
                 "expiry_date": req.expiry_date,
                 "right": right_val,
+                "spot_price": spot,
                 "count": len(strikes),
                 "strikes": strikes
             }
 
     return {
         "status": "error",
-        "error": resp,
+        "error": last_resp,
         "attempted_right_values": attempted
-    } 
+    }
 
