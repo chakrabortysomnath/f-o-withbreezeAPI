@@ -129,3 +129,34 @@ def search(req: SearchRequest, x_app_token: str | None = Header(default=None, al
             matches.append(s)
 
     return {"status": "ok", "count": len(matches), "matches": matches[:20]}
+
+
+@app.get("/debug/scripts_info")
+def scripts_info(x_app_token: str | None = Header(default=None, alias="X-APP-TOKEN")):
+    require_auth(x_app_token)
+    breeze = get_breeze()
+
+    # Load scripts (your SDK takes no args)
+    try:
+        breeze.get_stock_script_list()
+    except Exception as e:
+        return {"status": "error", "error": f"get_stock_script_list failed: {e}"}
+
+    scripts = getattr(breeze, "stock_script_dict_list", None)
+
+    if scripts is None:
+        return {"status": "error", "error": "breeze.stock_script_dict_list attribute not found"}
+
+    if not isinstance(scripts, list):
+        return {"status": "error", "error": f"stock_script_dict_list is not a list, got: {type(scripts)}"}
+
+    total = len(scripts)
+    sample = scripts[:3]  # small sample
+    keys = sorted(list(sample[0].keys())) if total > 0 and isinstance(sample[0], dict) else []
+
+    return {
+        "status": "ok",
+        "total_scripts": total,
+        "sample_keys": keys,
+        "sample_rows": sample
+    }
