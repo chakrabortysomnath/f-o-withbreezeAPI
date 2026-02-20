@@ -15,6 +15,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # Simple shared-secret protection
 APP_TOKEN = os.environ.get("APP_TOKEN", "")
 
@@ -26,10 +27,6 @@ BREEZE_SESSION_TOKEN = os.environ.get("BREEZE_SESSION_TOKEN", "")
 class QuoteRequest(BaseModel):
     exchange_code: str  # e.g. "NSE"
     stock_code: str     # e.g. "TCS"
-
-class SearchRequest(BaseModel):
-    exchange_code: str  # "NSE"
-    query: str          # partial text, e.g. "reliance"
 
 def require_auth(x_app_token: str | None):
     if not APP_TOKEN:
@@ -47,16 +44,6 @@ def get_breeze():
 @app.get("/health")
 def health():
     return {"ok": True}
-
-@app.get("/debug/breeze_methods")
-def breeze_methods(x_app_token: str | None = Header(default=None, alias="X-APP-TOKEN")):
-    require_auth(x_app_token)
-    breeze = get_breeze()
-
-    # show likely search-related methods
-    candidates = [m for m in dir(breeze) if any(k in m.lower() for k in ["search", "name", "scrip", "instrument", "symbol"])]
-    candidates.sort()
-    return {"status": "ok", "methods": candidates}
 
 
 @app.post("/quote")
@@ -91,72 +78,8 @@ def quote(req: QuoteRequest, x_app_token: str | None = Header(default=None, alia
         "volume": r.get("volume") or r.get("VOLUME"),
         "ltt": r.get("ltt") or r.get("LTT") or r.get("last_traded_time"),
     }
+
     return {"status": "ok", "quote": quote, "raw": r}
 
-@app.post("/search")
-def search(req: SearchRequest, x_app_token: str | None = Header(default=None, alias="X-APP-TOKEN")):
-    require_auth(x_app_token)
-    breeze = get_breeze()
-
-    # In your SDK version, this takes NO args
-    try:
-        breeze.get_stock_script_list()
-    except Exception as e:
-        return {"status": "error", "error": f"get_stock_script_list failed: {e}"}
-
-    scripts = getattr(breeze, "stock_script_dict_list", None)
-    if not scripts:
-        return {"status": "error", "error": "stock_script_dict_list is empty after loading script list"}
-
-    exch = req.exchange_code.strip().upper()
-    q = req.query.strip().lower()
-
-    matches = []
-    for s in scripts:
-        # 1) Filter by exchange if the dict contains an exchange-like field
-        # We'll check a few common key names safely.
-        s_exch = (
-            str(s.get("exchange_code") or s.get("exchange") or s.get("exch") or "")
-            .strip()
-            .upper()
-        )
-        if s_exch and s_exch != exch:
-            continue
-
-        # 2) Text match across all fields
-        blob = " ".join([str(v) for v in s.values() if v is not None]).lower()
-        if q in blob:
-            matches.append(s)
-
-    return {"status": "ok", "count": len(matches), "matches": matches[:20]}
 
 
-@app.get("/debug/scripts_info")
-def scripts_info(x_app_token: str | None = Header(default=None, alias="X-APP-TOKEN")):
-    require_auth(x_app_token)
-    breeze = get_breeze()
-
-    # Load scripts (your SDK takes no args)
-    try:
-        breeze.get_stock_script_list()
-    except Exception as e:
-        return {"status": "error", "error": f"get_stock_script_list failed: {e}"}
-
-    scripts = getattr(breeze, "stock_script_dict_list", None)
-
-    if scripts is None:
-        return {"status": "error", "error": "breeze.stock_script_dict_list attribute not found"}
-
-    if not isinstance(scripts, list):
-        return {"status": "error", "error": f"stock_script_dict_list is not a list, got: {type(scripts)}"}
-
-    total = len(scripts)
-    sample = scripts[:3]  # small sample
-    keys = sorted(list(sample[0].keys())) if total > 0 and isinstance(sample[0], dict) else []
-
-    return {
-        "status": "ok",
-        "total_scripts": total,
-        "sample_keys": keys,
-        "sample_rows": sample
-    }
