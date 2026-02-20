@@ -95,6 +95,22 @@ def quote(req: QuoteRequest, x_app_token: str | None = Header(default=None, alia
 
         "volume": r.get("volume") or r.get("VOLUME"),
         "ltt": r.get("ltt") or r.get("LTT") or r.get("last_traded_time"),
+
+        "bid_price": r.get("best_bid_price"),
+        "bid_qty": r.get("best_bid_quantity"),
+        "ask_price": r.get("best_offer_price"),
+        "ask_qty": r.get("best_offer_quantity"),
+
+        "ltp_percent_change": r.get("ltp_percent_change"),
+        "upper_circuit": r.get("upper_circuit"),
+        "lower_circuit": r.get("lower_circuit"),
+
+        "total_qty_traded": r.get("total_quantity_traded"),
+        "spot_price": r.get("spot_price"),
+
+        "expiry_date": r.get("expiry_date"),
+        "strike_price": r.get("strike_price"),
+        "right": r.get("right"),
     }
 
     return {
