@@ -98,20 +98,34 @@ def search(req: SearchRequest, x_app_token: str | None = Header(default=None, al
     require_auth(x_app_token)
     breeze = get_breeze()
 
+    # In your SDK version, this takes NO args
     try:
-        breeze.get_stock_script_list(req.exchange_code)  # positional arg
+        breeze.get_stock_script_list()
     except Exception as e:
         return {"status": "error", "error": f"get_stock_script_list failed: {e}"}
 
-    q = req.query.strip().lower()
     scripts = getattr(breeze, "stock_script_dict_list", None)
     if not scripts:
         return {"status": "error", "error": "stock_script_dict_list is empty after loading script list"}
 
+    exch = req.exchange_code.strip().upper()
+    q = req.query.strip().lower()
+
     matches = []
     for s in scripts:
+        # 1) Filter by exchange if the dict contains an exchange-like field
+        # We'll check a few common key names safely.
+        s_exch = (
+            str(s.get("exchange_code") or s.get("exchange") or s.get("exch") or "")
+            .strip()
+            .upper()
+        )
+        if s_exch and s_exch != exch:
+            continue
+
+        # 2) Text match across all fields
         blob = " ".join([str(v) for v in s.values() if v is not None]).lower()
         if q in blob:
             matches.append(s)
 
-    return {"status": "ok", "count": len(matches), "matches": matches[:20]}   
+    return {"status": "ok", "count": len(matches), "matches": matches[:20]}
