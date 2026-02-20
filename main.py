@@ -93,18 +93,32 @@ def quote(req: QuoteRequest, x_app_token: str | None = Header(default=None, alia
     }
     return {"status": "ok", "quote": quote, "raw": r}
 
+@app.post("/search")
+def search(req: SearchRequest, x_app_token: str | None = Header(default=None, alias="X-APP-TOKEN")):
+    require_auth(x_app_token)
+    breeze = get_breeze()
 
-    @app.post("/search")
-    def search(req: SearchRequest, x_app_token: str | None = Header(default=None, alias="X-APP-TOKEN")):
-        require_auth(x_app_token)
-        breeze = get_breeze()
+    # Ensure the script list is loaded (Breeze builds internal dicts from it)
+    # This call may take a moment the first time after deploy.
+    try:
+        breeze.get_stock_script_list(exchange_code=req.exchange_code)
+    except Exception as e:
+        return {"status": "error", "error": f"get_stock_script_list failed: {e}"}
 
-        # Breeze SDK supports instrument search; exact name may be get_names / search_scrips depending on SDK version.
-        # We'll try get_names first.
-        try:
-            resp = breeze.get_names(exchange_code=req.exchange_code, stock_code=req.query)
-        except Exception as e:
-            return {"status": "error", "error": str(e)}
+    q = req.query.strip().lower()
 
-        return {"status": "ok", "data": resp}
+    # breeze.stock_script_dict_list is typically a list of dicts after loading script list
+    scripts = getattr(breeze, "stock_script_dict_list", None)
+    if not scripts:
+        return {"status": "error", "error": "stock_script_dict_list is empty after loading script list"}
 
+    # Filter: match on common fields (name/symbol/code). We’ll return top 20.
+    matches = []
+    for s in scripts:
+        # make a single searchable blob
+        blob = " ".join([str(v) for v in s.values() if v is not None]).lower()
+        if q in blob:
+            matches.append(s)
+
+    return {"status": "ok", "count": len(matches), "matches": matches[:20]}
+   
