@@ -97,12 +97,12 @@ def quote(req: QuoteRequest, x_app_token: str | None = Header(default=None, alia
         "ltt": r.get("ltt") or r.get("LTT") or r.get("last_traded_time"),
     }
 
-     return {
-    "status": "ok",
-    "quote": quote,
-    "raw": r,
-    "raw_keys": sorted(list(r.keys()))
-}
+    return {
+        "status": "ok",
+        "quote": quote,
+        "raw": r,
+        "raw_keys": sorted(list(r.keys()))
+    }
 
 
 
