@@ -3,6 +3,8 @@ from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 from breeze_connect import BreezeConnect
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Optional
+
 
 
 app = FastAPI(title="Breeze Tiny Endpoint")
@@ -24,9 +26,15 @@ BREEZE_API_KEY = os.environ.get("BREEZE_API_KEY", "")
 BREEZE_API_SECRET = os.environ.get("BREEZE_API_SECRET", "")
 BREEZE_SESSION_TOKEN = os.environ.get("BREEZE_SESSION_TOKEN", "")
 
+
 class QuoteRequest(BaseModel):
     exchange_code: str  # e.g. "NSE"
     stock_code: str     # e.g. "TCS"
+    product_type: Optional[str] = None   # "cash", "futures", "options"
+    expiry_date: Optional[str] = None     # e.g. "27-Mar-2026"
+    strike_price: Optional[str] = None    # e.g. "22500"
+    right: Optional[str] = None           # "call" or "put"
+
 
 def require_auth(x_app_token: str | None):
     if not APP_TOKEN:
@@ -51,11 +59,21 @@ def quote(req: QuoteRequest, x_app_token: str | None = Header(default=None, alia
     require_auth(x_app_token)
     breeze = get_breeze()
 
-    resp = breeze.get_quotes(
-        stock_code=req.stock_code,
-        exchange_code=req.exchange_code,
-        product_type="cash"
-    )
+    params = {
+        "stock_code": req.stock_code.strip().upper(),
+        "exchange_code": req.exchange_code.strip().upper(),
+        "product_type": (req.product_type or "cash").strip().lower(),
+    }
+
+    # Add F&O fields only when present
+    if req.expiry_date:
+        params["expiry_date"] = req.expiry_date
+    if req.strike_price:
+        params["strike_price"] = str(req.strike_price)
+    if req.right:
+        params["right"] = req.right
+
+    resp = breeze.get_quotes(**params)
 
     rows = resp.get("Success") or []
     if not rows:
@@ -79,7 +97,12 @@ def quote(req: QuoteRequest, x_app_token: str | None = Header(default=None, alia
         "ltt": r.get("ltt") or r.get("LTT") or r.get("last_traded_time"),
     }
 
-    return {"status": "ok", "quote": quote, "raw": r}
+     return {
+    "status": "ok",
+    "quote": quote,
+    "raw": r,
+    "raw_keys": sorted(list(r.keys()))
+}
 
 
 
