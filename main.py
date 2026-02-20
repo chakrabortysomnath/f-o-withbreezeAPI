@@ -86,15 +86,15 @@ def quote(req: QuoteRequest, x_app_token: str | None = Header(default=None, alia
 
     @app.post("/search")
     def search(req: SearchRequest, x_app_token: str | None = Header(default=None, alias="X-APP-TOKEN")):
-    require_auth(x_app_token)
-    breeze = get_breeze()
+        require_auth(x_app_token)
+        breeze = get_breeze()
 
-    # Breeze SDK supports instrument search; exact name may be get_names / search_scrips depending on SDK version.
-    # We'll try get_names first.
-    try:
-        resp = breeze.get_names(exchange_code=req.exchange_code, stock_code=req.query)
-    except Exception as e:
-        return {"status": "error", "error": str(e)}
+        # Breeze SDK supports instrument search; exact name may be get_names / search_scrips depending on SDK version.
+        # We'll try get_names first.
+        try:
+            resp = breeze.get_names(exchange_code=req.exchange_code, stock_code=req.query)
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
 
-    return {"status": "ok", "data": resp}
+        return {"status": "ok", "data": resp}
 
