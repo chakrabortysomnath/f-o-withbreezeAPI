@@ -81,6 +81,8 @@ def quote(req: QuoteRequest, x_app_token: str | None = Header(default=None, alia
         "volume": r.get("volume") or r.get("VOLUME"),
         "ltt": r.get("ltt") or r.get("LTT") or r.get("last_traded_time"),
     }
+    return {"status": "ok", "quote": quote, "raw": r}
+
 
     @app.post("/search")
     def search(req: SearchRequest, x_app_token: str | None = Header(default=None, alias="X-APP-TOKEN")):
@@ -95,6 +97,4 @@ def quote(req: QuoteRequest, x_app_token: str | None = Header(default=None, alia
         return {"status": "error", "error": str(e)}
 
     return {"status": "ok", "data": resp}
-
-    return {"status": "ok", "quote": quote, "raw": r}
 
