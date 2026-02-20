@@ -48,6 +48,16 @@ def get_breeze():
 def health():
     return {"ok": True}
 
+@app.get("/debug/breeze_methods")
+def breeze_methods(x_app_token: str | None = Header(default=None, alias="X-APP-TOKEN")):
+    require_auth(x_app_token)
+    breeze = get_breeze()
+
+    # show likely search-related methods
+    candidates = [m for m in dir(breeze) if any(k in m.lower() for k in ["search", "name", "scrip", "instrument", "symbol"])]
+    candidates.sort()
+    return {"status": "ok", "methods": candidates}
+
 
 @app.post("/quote")
 def quote(req: QuoteRequest, x_app_token: str | None = Header(default=None, alias="X-APP-TOKEN")):
