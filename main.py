@@ -44,12 +44,24 @@ class QuoteRequest(BaseModel):
     strike_price: Optional[str] = None    # e.g. "22500"
     right: Optional[str] = None           # "call" or "put"
 
+class ChainCompareRequest(BaseModel):
+    exchange_code: str                 # "NFO"
+    stock_code: str                    # e.g. "TCS"
+    right: str                         # "call" / "put"
+    expiry_dates: list[str]            # exactly 3 for v1
+    strike_mode: Optional[str] = "around_spot"   # "around_spot" or "all"
+    strike_window: Optional[int] = 10
+
 
 def require_auth(x_app_token: str | None):
     if not APP_TOKEN:
         raise HTTPException(status_code=500, detail="APP_TOKEN not set on server")
     if x_app_token != APP_TOKEN:
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+
+
 
 def get_breeze():
     if not (BREEZE_API_KEY and BREEZE_API_SECRET and BREEZE_SESSION_TOKEN):
