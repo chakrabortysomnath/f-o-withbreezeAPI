@@ -45,12 +45,10 @@ class QuoteRequest(BaseModel):
     right: Optional[str] = None           # "call" or "put"
 
 class ChainCompareRequest(BaseModel):
-    exchange_code: str                 # "NFO"
-    stock_code: str                    # e.g. "TCS"
-    right: str                         # "call" / "put"
-    expiry_date: str                   # single expiry for v1 simplified
-    strike_mode: Optional[str] = "around_spot"   # "around_spot" or "all"
-    strike_window: Optional[int] = 10
+    exchange_code: str          # "NFO"
+    stock_code: str             # e.g. "TCS"
+    right: str                  # "call" / "put"
+    expiry_date: str            # single expiry
 
 
 def require_auth(x_app_token: str | None):
@@ -264,6 +262,7 @@ def option_strikes(
         "attempted_right_values": attempted
     }
 
+
 @app.post("/option_chain_compare")
 def option_chain_compare(
     req: ChainCompareRequest,
@@ -278,18 +277,10 @@ def option_chain_compare(
     expiry_date = str(req.expiry_date or "").strip()
 
     if exchange_code not in ("NFO", "BFO"):
-        raise HTTPException(status_code=400, detail="exchange_code must be NFO or BFO for option chain compare")
+        raise HTTPException(status_code=400, detail="exchange_code must be NFO or BFO for option chain")
 
     if not expiry_date:
         raise HTTPException(status_code=400, detail="expiry_date is required")
-
-    strike_mode = (req.strike_mode or "around_spot").strip().lower()
-    if strike_mode not in ("around_spot", "all"):
-        raise HTTPException(status_code=400, detail="strike_mode must be 'around_spot' or 'all'")
-
-    strike_window = req.strike_window if req.strike_window is not None else 10
-    if strike_window < 0:
-        raise HTTPException(status_code=400, detail="strike_window must be >= 0")
 
     rows, attempted, raw_resp = _fetch_option_chain_rows_for_expiry(
         breeze=breeze,
@@ -315,55 +306,30 @@ def option_chain_compare(
             spot_price = s
             break
 
-    # Build strike map
-    strike_map = {}
-    all_strikes = set()
-
+    # Filter and map rows (only non-zero ltp/bid/ask)
+    out_rows = []
     for r in rows:
         strike = _safe_float(r.get("strike_price"))
+        ltp = _safe_float(r.get("ltp"))
+        bid = _safe_float(r.get("best_bid_price"))
+        ask = _safe_float(r.get("best_offer_price"))
+
         if strike is None:
             continue
 
-        all_strikes.add(strike)
-        strike_map[strike] = {
-            "ltp": _safe_float(r.get("ltp")),
-            "bid": _safe_float(r.get("best_bid_price")),
-            "ask": _safe_float(r.get("best_offer_price")),
-        }
+        # Keep only rows where all three are non-zero
+        if not (ltp and bid and ask):
+            continue
 
-        if spot_price is None:
-            s = _safe_float(r.get("spot_price"))
-            if s is not None:
-                spot_price = s
-
-    if not all_strikes:
-        return {
-            "status": "error",
-            "error": "No strikes found in option chain response",
-            "attempted_right_values": attempted,
-            "debug_error": raw_resp
-        }
-
-    sorted_strikes = sorted(all_strikes)
-
-    # Apply strike filtering
-    filtered_strikes = sorted_strikes
-    if strike_mode == "around_spot" and spot_price is not None:
-        idx = _nearest_strike_index(sorted_strikes, spot_price)
-        if idx is not None:
-            start = max(0, idx - strike_window)
-            end = min(len(sorted_strikes), idx + strike_window + 1)
-            filtered_strikes = sorted_strikes[start:end]
-
-    rows_out = []
-    for strike in filtered_strikes:
-        q = strike_map.get(strike, {"ltp": None, "bid": None, "ask": None})
-        rows_out.append({
+        out_rows.append({
             "strike_price": strike,
-            "ltp": q.get("ltp"),
-            "bid": q.get("bid"),
-            "ask": q.get("ask"),
+            "premium": ltp,   # Premium = LTP
+            "ltp": ltp,
+            "bid": bid,
+            "ask": ask,
         })
+
+    out_rows.sort(key=lambda x: x["strike_price"])
 
     return {
         "status": "ok",
@@ -372,9 +338,7 @@ def option_chain_compare(
         "right": right,
         "expiry_date": expiry_date,
         "spot_price": spot_price,
-        "strike_mode": strike_mode,
-        "strike_window": strike_window,
-        "rows_count": len(rows_out),
-        "rows": rows_out,
+        "rows_count": len(out_rows),
+        "rows": out_rows,
         "attempted_right_values": attempted
     }
