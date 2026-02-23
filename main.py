@@ -48,7 +48,7 @@ class ChainCompareRequest(BaseModel):
     exchange_code: str                 # "NFO"
     stock_code: str                    # e.g. "TCS"
     right: str                         # "call" / "put"
-    expiry_dates: list[str]            # exactly 3 for v1
+    expiry_date: str                   # single expiry for v1 simplified
     strike_mode: Optional[str] = "around_spot"   # "around_spot" or "all"
     strike_window: Optional[int] = 10
 
@@ -269,20 +269,19 @@ def option_chain_compare(
     req: ChainCompareRequest,
     x_app_token: str | None = Header(default=None, alias="X-APP-TOKEN")
 ):
-
     require_auth(x_app_token)
     breeze = get_breeze()
 
     exchange_code = req.exchange_code.strip().upper()
     stock_code = req.stock_code.strip().upper()
     right = _normalize_right_for_chain(req.right)
-    expiry_dates = [str(x).strip() for x in (req.expiry_dates or []) if str(x).strip()]
+    expiry_date = str(req.expiry_date or "").strip()
 
     if exchange_code not in ("NFO", "BFO"):
         raise HTTPException(status_code=400, detail="exchange_code must be NFO or BFO for option chain compare")
 
-    if len(expiry_dates) != 3:
-        raise HTTPException(status_code=400, detail="expiry_dates must contain exactly 3 values in v1")
+    if not expiry_date:
+        raise HTTPException(status_code=400, detail="expiry_date is required")
 
     strike_mode = (req.strike_mode or "around_spot").strip().lower()
     if strike_mode not in ("around_spot", "all"):
@@ -292,109 +291,90 @@ def option_chain_compare(
     if strike_window < 0:
         raise HTTPException(status_code=400, detail="strike_window must be >= 0")
 
-    # Fetch chain rows for each expiry
-    expiry_rows = []   # list of dicts [{expiry, rows, attempted_right_values}, ...]
-    all_attempts = {}
+    rows, attempted, raw_resp = _fetch_option_chain_rows_for_expiry(
+        breeze=breeze,
+        stock_code=stock_code,
+        exchange_code=exchange_code,
+        expiry_date=expiry_date,
+        right=right
+    )
+
+    if not rows:
+        return {
+            "status": "error",
+            "error": "No option chain rows returned",
+            "attempted_right_values": attempted,
+            "debug_error": raw_resp
+        }
+
+    # Extract spot
     spot_price = None
-    debug_errors = {}
+    for r in rows:
+        s = _safe_float(r.get("spot_price"))
+        if s is not None:
+            spot_price = s
+            break
 
-    for exp in expiry_dates:
-        rows, attempted, raw_resp = _fetch_option_chain_rows_for_expiry(
-            breeze=breeze,
-            stock_code=stock_code,
-            exchange_code=exchange_code,
-            expiry_date=exp,
-            right=right
-        )
-        all_attempts[exp] = attempted
-
-        if not rows:
-            debug_errors[exp] = raw_resp
-            expiry_rows.append({"expiry": exp, "rows": []})
-            continue
-
-        # capture spot from any row if available
-        if spot_price is None:
-            for r in rows:
-                s = _safe_float(r.get("spot_price"))
-                if s is not None:
-                    spot_price = s
-                    break
-
-        expiry_rows.append({"expiry": exp, "rows": rows})
-
-    # Build strike->quote map for each expiry
-    # For each expiry: strike_map[expiry][strike] = {ltp,bid,ask}
-    strike_maps = {}
+    # Build strike map
+    strike_map = {}
     all_strikes = set()
 
-    for item in expiry_rows:
-        exp = item["expiry"]
-        rows = item["rows"]
-        smap = {}
+    for r in rows:
+        strike = _safe_float(r.get("strike_price"))
+        if strike is None:
+            continue
 
-        for r in rows:
-            strike = _safe_float(r.get("strike_price"))
-            if strike is None:
-                continue
+        all_strikes.add(strike)
+        strike_map[strike] = {
+            "ltp": _safe_float(r.get("ltp")),
+            "bid": _safe_float(r.get("best_bid_price")),
+            "ask": _safe_float(r.get("best_offer_price")),
+        }
 
-            all_strikes.add(strike)
-            smap[strike] = {
-                "ltp": _safe_float(r.get("ltp")),
-                "bid": _safe_float(r.get("best_bid_price")),
-                "ask": _safe_float(r.get("best_offer_price"))
-            }
-
-            # backup spot capture (if not already found)
-            if spot_price is None:
-                s = _safe_float(r.get("spot_price"))
-                if s is not None:
-                    spot_price = s
-
-        strike_maps[exp] = smap
+        if spot_price is None:
+            s = _safe_float(r.get("spot_price"))
+            if s is not None:
+                spot_price = s
 
     if not all_strikes:
         return {
             "status": "error",
-            "error": "No option chain rows returned for any expiry",
-            "attempted_right_values": all_attempts,
-            "debug_errors": debug_errors
+            "error": "No strikes found in option chain response",
+            "attempted_right_values": attempted,
+            "debug_error": raw_resp
         }
 
-    sorted_union_strikes = sorted(all_strikes)
+    sorted_strikes = sorted(all_strikes)
 
     # Apply strike filtering
-    filtered_strikes = sorted_union_strikes
+    filtered_strikes = sorted_strikes
     if strike_mode == "around_spot" and spot_price is not None:
-        idx = _nearest_strike_index(sorted_union_strikes, spot_price)
+        idx = _nearest_strike_index(sorted_strikes, spot_price)
         if idx is not None:
             start = max(0, idx - strike_window)
-            end = min(len(sorted_union_strikes), idx + strike_window + 1)
-            filtered_strikes = sorted_union_strikes[start:end]
+            end = min(len(sorted_strikes), idx + strike_window + 1)
+            filtered_strikes = sorted_strikes[start:end]
 
-    # Build response rows with stable e1/e2/e3 keys
-    e1, e2, e3 = expiry_dates[0], expiry_dates[1], expiry_dates[2]
     rows_out = []
-
     for strike in filtered_strikes:
-        row = {
+        q = strike_map.get(strike, {"ltp": None, "bid": None, "ask": None})
+        rows_out.append({
             "strike_price": strike,
-            "e1": strike_maps.get(e1, {}).get(strike, {"ltp": None, "bid": None, "ask": None}),
-            "e2": strike_maps.get(e2, {}).get(strike, {"ltp": None, "bid": None, "ask": None}),
-            "e3": strike_maps.get(e3, {}).get(strike, {"ltp": None, "bid": None, "ask": None}),
-        }
-        rows_out.append(row)
+            "ltp": q.get("ltp"),
+            "bid": q.get("bid"),
+            "ask": q.get("ask"),
+        })
 
     return {
         "status": "ok",
         "exchange": exchange_code,
         "symbol": stock_code,
         "right": right,
+        "expiry_date": expiry_date,
         "spot_price": spot_price,
-        "expiries": expiry_dates,
         "strike_mode": strike_mode,
         "strike_window": strike_window,
         "rows_count": len(rows_out),
         "rows": rows_out,
-        "attempted_right_values": all_attempts
+        "attempted_right_values": attempted
     }
