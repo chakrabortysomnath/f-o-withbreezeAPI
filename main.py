@@ -132,17 +132,6 @@ def health():
     return {"ok": True}
 
 
-@app.options("/{full_path:path}")
-def preflight(full_path: str, request: Request):
-    return Response(
-        status_code=204,
-        headers={
-            "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
-            "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type,X-APP-TOKEN",
-            "Access-Control-Max-Age": "86400",
-        },
-    )
 
 
 @app.options("/quote")
@@ -156,7 +145,6 @@ def options_quote(request: Request):
             "Access-Control-Max-Age": "86400",
         },
     )
-
 
 @app.post("/quote")
 def quote(req: QuoteRequest, x_app_token: str | None = Header(default=None, alias="X-APP-TOKEN")):
