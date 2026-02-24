@@ -9,7 +9,6 @@ from fastapi import Response, Request
 
 
 app = FastAPI(title="Breeze Tiny Endpoint")
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -132,7 +131,9 @@ def health():
     return {"ok": True}
 
 
-
+@app.get("/version")
+def version():
+    return {"version": "cors-options-quote-v1"}
 
 @app.options("/quote")
 def options_quote(request: Request):
