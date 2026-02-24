@@ -145,6 +145,18 @@ def preflight(full_path: str, request: Request):
     )
 
 
+@app.options("/quote")
+def options_quote(request: Request):
+    return Response(
+        status_code=204,
+        headers={
+            "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
+            "Access-Control-Allow-Methods": "POST,OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type,X-APP-TOKEN",
+            "Access-Control-Max-Age": "86400",
+        },
+    )
+
 
 @app.post("/quote")
 def quote(req: QuoteRequest, x_app_token: str | None = Header(default=None, alias="X-APP-TOKEN")):
@@ -212,6 +224,17 @@ def quote(req: QuoteRequest, x_app_token: str | None = Header(default=None, alia
         "raw_keys": sorted(list(r.keys()))
     }
 
+@app.options("/option_strikes")
+def option_strikes(request: Request):
+    return Response(
+        status_code=204,
+        headers={
+            "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
+            "Access-Control-Allow-Methods": "POST,OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type,X-APP-TOKEN",
+            "Access-Control-Max-Age": "86400",
+        },
+    )
 
 @app.post("/option_strikes")
 def option_strikes(
@@ -276,6 +299,17 @@ def option_strikes(
         "attempted_right_values": attempted
     }
 
+@app.options("/option_chain_compare")
+def option_chain_compare(request: Request):
+    return Response(
+        status_code=204,
+        headers={
+            "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
+            "Access-Control-Allow-Methods": "POST,OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type,X-APP-TOKEN",
+            "Access-Control-Max-Age": "86400",
+        },
+    )
 
 @app.post("/option_chain_compare")
 def option_chain_compare(
