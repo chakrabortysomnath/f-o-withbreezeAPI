@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from breeze_connect import BreezeConnect
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
-
+from fastapi import Response, Request
 
 
 
@@ -130,6 +130,20 @@ def get_breeze():
 @app.get("/health")
 def health():
     return {"ok": True}
+
+
+@app.options("/{full_path:path}")
+def preflight(full_path: str, request: Request):
+    return Response(
+        status_code=204,
+        headers={
+            "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
+            "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type,X-APP-TOKEN",
+            "Access-Control-Max-Age": "86400",
+        },
+    )
+
 
 
 @app.post("/quote")
