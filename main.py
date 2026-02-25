@@ -377,8 +377,14 @@ def option_chain_compare(
             "ltp": ltp,
             "bid": bid,
             "ask": ask,
-        })
 
+            # NEW raw fields (for usability)
+            "bid_qty": r.get("best_bid_quantity"),
+            "ask_qty": r.get("best_offer_quantity"),
+            "ltt": r.get("ltt"),
+            "volume": r.get("total_quantity_traded"),
+        })
+        
     out_rows.sort(key=lambda x: x["strike_price"])
 
     return {
