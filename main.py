@@ -1,10 +1,12 @@
 import os
+import requests
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 from breeze_connect import BreezeConnect
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 from fastapi import Response, Request
+from fastapi import Header
 
 
 
@@ -149,6 +151,14 @@ def options_quote(request: Request):
             "Access-Control-Max-Age": "86400",
         },
     )
+
+
+@app.get("/egress_ip")
+def egress_ip(x_app_token: str | None = Header(default=None, alias="X-APP-TOKEN")):
+    require_auth(x_app_token)
+    r = requests.get("https://api.ipify.org?format=json", timeout=10)
+    return r.json()
+
 
 @app.post("/quote")
 def quote(req: QuoteRequest, x_app_token: str | None = Header(default=None, alias="X-APP-TOKEN")):
