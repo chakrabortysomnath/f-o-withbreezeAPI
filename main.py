@@ -123,7 +123,10 @@ def get_breeze():
     return breeze
 
 
-
+@app.post("/echo")
+def echo(payload: dict, x_app_token: str | None = Header(default=None, alias="X-APP-TOKEN")):
+    require_auth(x_app_token)
+    return {"status": "ok", "received": payload}
 
 
 @app.get("/health")
