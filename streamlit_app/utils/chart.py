@@ -6,7 +6,7 @@ import yfinance as yf
 
 @st.cache_data(ttl=3600)
 def _fetch_ohlc(yf_ticker: str) -> pd.DataFrame:
-    df = yf.Ticker(yf_ticker).history(period="90d", interval="1d")
+    df = yf.Ticker(yf_ticker).history(period="30d", interval="1d")
     return df.reset_index()
 
 
@@ -36,7 +36,7 @@ def render_candlestick(yf_ticker: str, title: str | None = None) -> None:
         ]
     )
     fig.update_layout(
-        title=title or f"{yf_ticker} — Last 90 Days",
+        title=title or f"{yf_ticker} — Last 30 Days",
         yaxis_title="Price (₹)",
         height=420,
         xaxis_rangeslider_visible=False,

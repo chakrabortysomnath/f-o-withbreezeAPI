@@ -1,4 +1,4 @@
-import re
+import datetime
 import streamlit as st
 import pandas as pd
 from utils.api import fetch_quote, fetch_option_chain
@@ -25,10 +25,6 @@ def _to_int(v):
         return 0
 
 
-def _valid_expiry(s: str) -> bool:
-    """Accepts dd-Mon-yyyy format only, e.g. 27-Mar-2026."""
-    return bool(re.match(r"^\d{2}-[A-Za-z]{3}-\d{4}$", s.strip()))
-
 
 # ── Inputs ─────────────────────────────────────────────────────────────────────
 col1, col2 = st.columns(2)
@@ -49,11 +45,14 @@ with col2:
     right = None
 
     if is_fno:
-        expiry_date = st.text_input(
+        expiry_raw = st.date_input(
             "Expiry Date",
-            placeholder="dd-Mon-yyyy  e.g. 27-Mar-2026",
-            help="Must match the Breeze format exactly, e.g. 27-Mar-2026",
+            value=None,
+            min_value=datetime.date.today(),
+            format="DD/MM/YYYY",
+            help="Select the option expiry date.",
         )
+        expiry_date = expiry_raw.strftime("%d-%b-%Y") if expiry_raw else ""
 
     if is_options:
         right = st.selectbox("Right", ["call", "put"])
@@ -65,7 +64,7 @@ strike_price = None
 if is_fno and is_options:
     trigger_key = (exchange, symbol, expiry_date.strip(), right)
     last_key = st.session_state.get("q_auto_fetch_key")
-    all_ready = bool(symbol) and bool(right) and _valid_expiry(expiry_date)
+    all_ready = bool(symbol) and bool(right) and bool(expiry_date)
 
     # Any change to the trigger fields → clear stale data
     if trigger_key != last_key:
@@ -101,10 +100,7 @@ if is_fno and is_options:
     if st.session_state.get("q_fetch_error"):
         st.error(f"Could not load strikes: {st.session_state['q_fetch_error']}")
     elif not all_ready:
-        st.caption(
-            "Fill in **Expiry Date** and **Right** — strikes load automatically "
-            "when all three fields are set."
-        )
+        st.caption("Select an **Expiry Date** and **Right** — strikes load automatically.")
 
     strikes_list = st.session_state.get("q_strikes", [])
     spot_val = st.session_state.get("q_spot")

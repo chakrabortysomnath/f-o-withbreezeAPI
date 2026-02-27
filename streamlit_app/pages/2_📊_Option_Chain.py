@@ -1,3 +1,4 @@
+import datetime
 import streamlit as st
 import pandas as pd
 from utils.api import fetch_option_chain
@@ -78,11 +79,14 @@ with col1:
 
 with col2:
     right = st.selectbox("Right", ["call", "put"])
-    expiry_date = st.text_input(
+    expiry_raw = st.date_input(
         "Expiry Date",
-        placeholder="dd-Mon-yyyy  e.g. 27-Mar-2026",
-        help="Must match the Breeze format exactly.",
+        value=None,
+        min_value=datetime.date.today(),
+        format="DD/MM/YYYY",
+        help="Select the option expiry date.",
     )
+    expiry_date = expiry_raw.strftime("%d-%b-%Y") if expiry_raw else ""
 
 sym_info = get_symbol_info(symbol)
 
@@ -203,5 +207,5 @@ with col_info:
 st.divider()
 yf_ticker = sym_info.get("yf_ticker") if sym_info else None
 nse_label = sym_info.get("nse_symbol", data["symbol"]) if sym_info else data["symbol"]
-st.subheader(f"📈 {nse_label} — Underlying (Last 90 Days)")
-render_candlestick(yf_ticker, title=f"{nse_label} — Last 90 Days")
+st.subheader(f"📈 {nse_label} — Underlying (Last 30 Days)")
+render_candlestick(yf_ticker, title=f"{nse_label} — Last 30 Days")
