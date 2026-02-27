@@ -1,4 +1,5 @@
 import hashlib
+import secrets as _secrets
 import time
 import streamlit as st
 
@@ -18,23 +19,60 @@ def _check_credentials(username: str, password: str) -> bool:
     return username == expected_user and _hash(password, salt) == expected_hash
 
 
+def _show_setup_form() -> None:
+    """Shown when AUTH_* secrets are not yet configured."""
+    _, centre, _ = st.columns([1, 1.2, 1])
+    with centre:
+        st.markdown("## ⚙️ First-time Setup")
+        st.info(
+            "Auth credentials are not yet configured.  \n"
+            "Generate them here, then paste the three lines into  \n"
+            "**Streamlit Cloud → App Settings → Secrets** and reload the app.",
+            icon="ℹ️",
+        )
+
+        with st.form("setup_form"):
+            username = st.text_input("Choose a username")
+            password = st.text_input("Choose a password", type="password")
+            confirm  = st.text_input("Confirm password",  type="password")
+            submitted = st.form_submit_button(
+                "Generate credentials", type="primary", use_container_width=True
+            )
+
+        if submitted:
+            if not username or not password:
+                st.error("Username and password cannot be empty.")
+            elif password != confirm:
+                st.error("Passwords do not match.")
+            else:
+                salt          = _secrets.token_hex(32)
+                password_hash = _hash(password, salt)
+
+                st.success("Credentials generated — copy the block below into your Streamlit secrets.")
+                st.code(
+                    f'AUTH_USERNAME      = "{username}"\n'
+                    f'AUTH_SALT          = "{salt}"\n'
+                    f'AUTH_PASSWORD_HASH = "{password_hash}"',
+                    language="toml",
+                )
+                st.info(
+                    "After saving the secrets in Streamlit Cloud, reload the app to activate login.",
+                    icon="🔄",
+                )
+
+
 def require_login() -> None:
     """
     Call at the top of every page (after set_page_config).
 
-    - If the user is not authenticated: renders a centered login form and
-      calls st.stop() so nothing else on the page is rendered.
-    - If the user is authenticated: adds a Logout button to the sidebar
-      and returns immediately so the page renders normally.
+    - Auth secrets missing  → shows first-time setup form, then st.stop()
+    - Not authenticated     → shows login form, then st.stop()
+    - Authenticated         → adds Logout to the sidebar and returns
     """
-    # ── Check auth secrets are configured ─────────────────────────────────────
+    # ── First-time setup ───────────────────────────────────────────────────────
     missing = [k for k in _REQUIRED_SECRETS if k not in st.secrets]
     if missing:
-        st.error(
-            f"Auth secrets not configured: **{', '.join(missing)}**\n\n"
-            "Run `python generate_password_hash.py` and add the output to "
-            "`.streamlit/secrets.toml` or Streamlit Cloud → Settings → Secrets."
-        )
+        _show_setup_form()
         st.stop()
 
     # ── Already logged in ──────────────────────────────────────────────────────
