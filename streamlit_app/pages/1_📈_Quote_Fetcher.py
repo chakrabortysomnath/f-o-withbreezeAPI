@@ -1,13 +1,34 @@
+import re
 import streamlit as st
 import pandas as pd
-from utils.api import fetch_quote, fetch_option_strikes
-from utils.config import load_config, get_symbols, get_symbol_info
+from utils.api import fetch_quote, fetch_option_chain
+from utils.config import load_config, get_symbols
 
 st.set_page_config(page_title="Quote Fetcher", page_icon="📈", layout="wide")
 st.title("📈 Quote Fetcher")
 st.caption("Fetch a live price for any stock, future, or option contract.")
 
-load_config()  # ensure session_state is initialised
+load_config()
+
+
+def _to_f(v):
+    try:
+        return float(v) if v not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _to_int(v):
+    try:
+        return int(float(v)) if v not in (None, "") else 0
+    except (TypeError, ValueError):
+        return 0
+
+
+def _valid_expiry(s: str) -> bool:
+    """Accepts dd-Mon-yyyy format only, e.g. 27-Mar-2026."""
+    return bool(re.match(r"^\d{2}-[A-Za-z]{3}-\d{4}$", s.strip()))
+
 
 # ── Inputs ─────────────────────────────────────────────────────────────────────
 col1, col2 = st.columns(2)
@@ -15,13 +36,18 @@ col1, col2 = st.columns(2)
 with col1:
     exchange = st.selectbox("Exchange", ["NSE", "NFO", "BFO"])
     symbol = st.selectbox("Symbol", get_symbols())
-    product_type = st.selectbox("Product Type", ["cash", "futures", "options"])
+    is_fno = exchange in ("NFO", "BFO")
+    product_type = st.selectbox(
+        "Product Type",
+        ["cash", "futures", "options"] if is_fno else ["cash"],
+    )
 
-is_fno = exchange in ("NFO", "BFO")
 is_options = product_type == "options"
 
 with col2:
     expiry_date = ""
+    right = None
+
     if is_fno:
         expiry_date = st.text_input(
             "Expiry Date",
@@ -29,103 +55,139 @@ with col2:
             help="Must match the Breeze format exactly, e.g. 27-Mar-2026",
         )
 
-    right = None
     if is_options:
         right = st.selectbox("Right", ["call", "put"])
 
-        st.markdown("**Strike Price**")
-        load_strikes_btn = st.button("Load Strikes ↓", help="Fetch available strikes from Breeze")
 
-        if load_strikes_btn:
-            if not expiry_date or not right:
-                st.warning("Set Expiry Date and Right before loading strikes.")
-            else:
-                with st.spinner("Loading strikes…"):
-                    try:
-                        strikes, spot = fetch_option_strikes(exchange, symbol, expiry_date, right)
-                        st.session_state["q_strikes"] = strikes
-                        st.session_state["q_spot"] = spot
-                        label = f"{len(strikes)} strikes loaded"
-                        if spot:
-                            label += f" | Spot ₹{float(spot):,.2f}"
-                        st.success(label)
-                    except Exception as e:
-                        st.error(f"Failed to load strikes: {e}")
-
-strikes_list = st.session_state.get("q_strikes", [])
+# ── Auto-fetch liquid strikes (NFO/BFO options only) ───────────────────────────
 strike_price = None
-if is_options and strikes_list:
-    spot_val = st.session_state.get("q_spot")
-    if spot_val:
-        st.caption(f"Spot: ₹{float(spot_val):,.2f}")
-    # Default selection to ATM (nearest strike to spot)
-    default_idx = 0
-    if spot_val:
-        diffs = [abs(float(s) - float(spot_val)) for s in strikes_list]
-        default_idx = diffs.index(min(diffs))
-    strike_price = st.selectbox("Strike Price", strikes_list, index=default_idx)
 
-# ── Fetch ──────────────────────────────────────────────────────────────────────
+if is_fno and is_options:
+    trigger_key = (exchange, symbol, expiry_date.strip(), right)
+    last_key = st.session_state.get("q_auto_fetch_key")
+    all_ready = bool(symbol) and bool(right) and _valid_expiry(expiry_date)
+
+    # Any change to the trigger fields → clear stale data
+    if trigger_key != last_key:
+        for k in ("q_strikes", "q_spot", "q_fetch_error", "q_auto_fetch_key"):
+            st.session_state.pop(k, None)
+
+    # Trigger auto-fetch when all three fields are populated and no fetch for this key yet
+    if all_ready and st.session_state.get("q_auto_fetch_key") is None:
+        with st.spinner(
+            f"Loading liquid strikes — {symbol} {right.upper()} {expiry_date.strip()}…"
+        ):
+            try:
+                data = fetch_option_chain(exchange, symbol, right, expiry_date.strip())
+                rows = data.get("rows", [])
+                # Keep only rows where both bid_qty AND ask_qty are non-zero
+                liquid = [
+                    r for r in rows
+                    if _to_int(r.get("bid_qty")) > 0 and _to_int(r.get("ask_qty")) > 0
+                ]
+                strikes = sorted({
+                    float(r["strike_price"])
+                    for r in liquid
+                    if r.get("strike_price") is not None
+                })
+                st.session_state["q_strikes"] = strikes
+                st.session_state["q_spot"] = data.get("spot_price")
+                st.session_state["q_auto_fetch_key"] = trigger_key
+            except Exception as e:
+                st.session_state["q_fetch_error"] = str(e)
+                st.session_state["q_auto_fetch_key"] = trigger_key  # prevent retry loop
+
+    # ── Strike picker ───────────────────────────────────────────────────────────
+    if st.session_state.get("q_fetch_error"):
+        st.error(f"Could not load strikes: {st.session_state['q_fetch_error']}")
+    elif not all_ready:
+        st.caption(
+            "Fill in **Expiry Date** and **Right** — strikes load automatically "
+            "when all three fields are set."
+        )
+
+    strikes_list = st.session_state.get("q_strikes", [])
+    spot_val = st.session_state.get("q_spot")
+
+    if strikes_list:
+        spot_label = f"Spot ₹{float(spot_val):,.2f}  ·  " if spot_val else ""
+        st.caption(f"{spot_label}{len(strikes_list)} liquid strikes (non-zero bid & ask qty)")
+
+        # Default selection to ATM strike
+        default_idx = 0
+        if spot_val:
+            diffs = [abs(s - float(spot_val)) for s in strikes_list]
+            default_idx = diffs.index(min(diffs))
+
+        strike_price = st.selectbox("Strike Price", strikes_list, index=default_idx)
+
+    elif st.session_state.get("q_auto_fetch_key") and not st.session_state.get("q_fetch_error"):
+        st.warning("No liquid strikes found — all returned strikes have zero bid or ask quantity.")
+
+
+# ── Fetch Quote button ─────────────────────────────────────────────────────────
 st.divider()
+
+# For NFO/BFO options: require a strike selection before showing the button
+if is_fno and is_options and strike_price is None:
+    strikes_list = st.session_state.get("q_strikes", [])
+    if not strikes_list and not st.session_state.get("q_fetch_error"):
+        st.caption("Select Symbol, Expiry Date, and Right above — the Fetch Quote button appears once a strike is selected.")
+    st.stop()
+
 fetch_btn = st.button("🔄 Fetch Quote", type="primary", use_container_width=True)
 
-if fetch_btn:
-    if not symbol:
-        st.warning("Select a symbol first.")
-    else:
-        with st.spinner(f"Fetching {exchange}:{symbol}…"):
-            try:
-                q = fetch_quote(
-                    exchange_code=exchange,
-                    stock_code=symbol,
-                    product_type=product_type,
-                    expiry_date=expiry_date or None,
-                    strike_price=str(strike_price) if strike_price is not None else None,
-                    right=right,
-                )
+if not fetch_btn:
+    st.stop()
 
-                def to_float(v):
-                    try:
-                        return float(v) if v not in (None, "") else None
-                    except (TypeError, ValueError):
-                        return None
+# ── Quote display ───────────────────────────────────────────────────────────────
+with st.spinner(f"Fetching {exchange}:{symbol}…"):
+    try:
+        q = fetch_quote(
+            exchange_code=exchange,
+            stock_code=symbol,
+            product_type=product_type,
+            expiry_date=expiry_date or None,
+            strike_price=str(strike_price) if strike_price is not None else None,
+            right=right,
+        )
 
-                ltp = to_float(q.get("ltp"))
-                prev = to_float(q.get("prev_close"))
-                delta = f"{ltp - prev:+.2f}" if ltp is not None and prev is not None else None
+        ltp = _to_f(q.get("ltp"))
+        prev = _to_f(q.get("prev_close"))
+        delta = f"{ltp - prev:+.2f}" if ltp is not None and prev is not None else None
 
-                st.success(f"Quote fetched — {exchange}:{symbol}")
+        st.success(f"Quote fetched — {exchange}:{symbol}")
 
-                # ── Metric row 1 ───────────────────────────────────────────
-                m1, m2, m3, m4, m5 = st.columns(5)
-                m1.metric("LTP", f"₹{ltp:,.2f}" if ltp is not None else "—", delta=delta)
-                m2.metric("Open", f"₹{to_float(q.get('open')):,.2f}" if to_float(q.get("open")) is not None else "—")
-                m3.metric("High", f"₹{to_float(q.get('high')):,.2f}" if to_float(q.get("high")) is not None else "—")
-                m4.metric("Low", f"₹{to_float(q.get('low')):,.2f}" if to_float(q.get("low")) is not None else "—")
-                m5.metric("Prev Close", f"₹{prev:,.2f}" if prev is not None else "—")
+        # ── Metric row 1 ───────────────────────────────────────────────────────
+        m1, m2, m3, m4, m5 = st.columns(5)
+        m1.metric("LTP",        f"₹{ltp:,.2f}" if ltp is not None else "—", delta=delta)
+        m2.metric("Open",       f"₹{_to_f(q.get('open')):,.2f}" if _to_f(q.get("open")) is not None else "—")
+        m3.metric("High",       f"₹{_to_f(q.get('high')):,.2f}" if _to_f(q.get("high")) is not None else "—")
+        m4.metric("Low",        f"₹{_to_f(q.get('low')):,.2f}" if _to_f(q.get("low")) is not None else "—")
+        m5.metric("Prev Close", f"₹{prev:,.2f}" if prev is not None else "—")
 
-                # ── Metric row 2 ───────────────────────────────────────────
-                m6, m7, m8, m9, m10 = st.columns(5)
-                bid = to_float(q.get("bid_price"))
-                ask = to_float(q.get("ask_price"))
-                vol = q.get("volume")
-                spot = to_float(q.get("spot_price"))
+        # ── Metric row 2 ───────────────────────────────────────────────────────
+        m6, m7, m8, m9, m10 = st.columns(5)
+        bid = _to_f(q.get("bid_price"))
+        ask = _to_f(q.get("ask_price"))
+        vol = q.get("volume")
+        spot = _to_f(q.get("spot_price"))
 
-                m6.metric("Bid", f"₹{bid:,.2f}" if bid is not None else "—")
-                m7.metric("Ask", f"₹{ask:,.2f}" if ask is not None else "—")
-                m8.metric("Bid Qty", q.get("bid_qty") or "—")
-                m9.metric("Ask Qty", q.get("ask_qty") or "—")
-                m10.metric("Volume", f"{int(float(vol)):,}" if vol not in (None, "") else "—")
+        m6.metric("Bid",     f"₹{bid:,.2f}" if bid is not None else "—")
+        m7.metric("Ask",     f"₹{ask:,.2f}" if ask is not None else "—")
+        m8.metric("Bid Qty", q.get("bid_qty") or "—")
+        m9.metric("Ask Qty", q.get("ask_qty") or "—")
+        m10.metric("Volume", f"{int(float(vol)):,}" if vol not in (None, "") else "—")
 
-                if is_options and spot is not None:
-                    st.info(f"Spot Price: ₹{spot:,.2f}")
+        if is_options and spot is not None:
+            st.info(f"Spot Price: ₹{spot:,.2f}")
 
-                with st.expander("Full quote payload"):
-                    st.dataframe(
-                        pd.DataFrame({"Field": q.keys(), "Value": q.values()}),
-                        use_container_width=True,
-                        hide_index=True,
-                    )
+        with st.expander("Full quote payload"):
+            st.dataframe(
+                pd.DataFrame({"Field": list(q.keys()), "Value": list(q.values())}),
+                use_container_width=True,
+                hide_index=True,
+            )
 
-            except Exception as e:
-                st.error(f"Error: {e}")
+    except Exception as e:
+        st.error(f"Error: {e}")
