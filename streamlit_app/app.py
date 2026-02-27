@@ -1,4 +1,5 @@
 import streamlit as st
+from utils.auth import require_login
 
 st.set_page_config(
     page_title="Breeze Options Dashboard",
@@ -6,7 +7,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# ── Validate secrets early so users get a clear message ───────────────────────
+# ── Validate backend secrets early ────────────────────────────────────────────
 missing = [k for k in ("APP_TOKEN", "BASE_URL") if k not in st.secrets]
 if missing:
     st.error(
@@ -15,6 +16,8 @@ if missing:
         "the Streamlit Cloud dashboard under *Settings → Secrets*."
     )
     st.stop()
+
+require_login()
 
 # ── Home page ──────────────────────────────────────────────────────────────────
 st.title("📊 Breeze Options Dashboard")

@@ -2,10 +2,12 @@ import datetime
 import streamlit as st
 import pandas as pd
 from utils.api import fetch_option_chain
+from utils.auth import require_login
 from utils.chart import render_candlestick
 from utils.config import load_config, get_symbols, get_symbol_info
 
 st.set_page_config(page_title="Option Chain", page_icon="📊", layout="wide")
+require_login()
 st.title("📊 Option Chain Compare")
 st.caption("Covered-call P&L analysis for a single expiry.")
 

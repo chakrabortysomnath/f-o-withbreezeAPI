@@ -2,9 +2,11 @@ import datetime
 import streamlit as st
 import pandas as pd
 from utils.api import fetch_quote, fetch_option_chain
+from utils.auth import require_login
 from utils.config import load_config, get_symbols
 
 st.set_page_config(page_title="Quote Fetcher", page_icon="📈", layout="wide")
+require_login()
 st.title("📈 Quote Fetcher")
 st.caption("Fetch a live price for any stock, future, or option contract.")
 

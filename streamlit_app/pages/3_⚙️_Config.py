@@ -1,9 +1,11 @@
 import streamlit as st
 import pandas as pd
 import json
+from utils.auth import require_login
 from utils.config import load_config, save_config
 
 st.set_page_config(page_title="Config", page_icon="⚙️", layout="wide")
+require_login()
 st.title("⚙️ Config")
 st.caption("Manage symbols, lot sizes, and yfinance ticker mappings.")
 
