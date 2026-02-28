@@ -1,3 +1,4 @@
+import logging
 import os
 import requests
 from fastapi import APIRouter, Header
@@ -5,6 +6,7 @@ from auth import require_auth
 from breeze_connect import BreezeConnect
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.get("/health")
@@ -52,16 +54,20 @@ def health_detailed(x_app_token: str | None = Header(default=None, alias="X-APP-
     }
 
     # ── 2. Static / egress IP ─────────────────────────────────────────────────
+    proxy_url = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY") or os.environ.get("QUOTAGUARDSTATIC_URL")
+    logger.info("EGRESS_IP_CHECK  proxy_active=%s", bool(proxy_url))
     try:
         r = requests.get("https://api.ipify.org?format=json", timeout=10)
         r.raise_for_status()
         ip = r.json().get("ip", "unknown")
+        logger.info("EGRESS_IP_CHECK  resolved_ip=%s", ip)
         layers["static_ip"] = {
             "ok": True,
             "ip": ip,
             "detail": "Egress IP resolved",
         }
     except Exception as exc:
+        logger.error("EGRESS_IP_CHECK  failed: %s", exc)
         layers["static_ip"] = {
             "ok": False,
             "ip": None,
@@ -90,13 +96,16 @@ def health_detailed(x_app_token: str | None = Header(default=None, alias="X-APP-
         }
     else:
         try:
+            logger.info("BREEZE_CHECK  attempting generate_session")
             breeze = BreezeConnect(api_key=api_key)
             breeze.generate_session(api_secret=api_secret, session_token=session_tok)
+            logger.info("BREEZE_CHECK  session authenticated successfully")
             layers["breeze_api"] = {
                 "ok": True,
                 "detail": "Breeze session authenticated successfully",
             }
         except Exception as exc:
+            logger.error("BREEZE_CHECK  failed: %s", exc)
             layers["breeze_api"] = {
                 "ok": False,
                 "detail": str(exc),
