@@ -1,0 +1,46 @@
+{
+  "symbols": [
+    {
+      "nfo_symbol": "NIFTY",
+      "nse_symbol": "NIFTY",
+      "yf_ticker": "^NSEI",
+      "lot_size": 75
+    },
+    {
+      "nfo_symbol": "BANKNIFTY",
+      "nse_symbol": "BANKNIFTY",
+      "yf_ticker": "^NSEBANK",
+      "lot_size": 30
+    },
+    {
+      "nfo_symbol": "FINNIFTY",
+      "nse_symbol": "FINNIFTY",
+      "yf_ticker": "^CNXFIN",
+      "lot_size": 40
+    },
+    {
+      "nfo_symbol": "TCS",
+      "nse_symbol": "TCS",
+      "yf_ticker": "TCS.NS",
+      "lot_size": 150
+    },
+    {
+      "nfo_symbol": "RELIANCE",
+      "nse_symbol": "RELIANCE",
+      "yf_ticker": "RELIANCE.NS",
+      "lot_size": 250
+    },
+    {
+      "nfo_symbol": "INFY",
+      "nse_symbol": "INFY",
+      "yf_ticker": "INFY.NS",
+      "lot_size": 300
+    },
+    {
+      "nfo_symbol": "HDFCBANK",
+      "nse_symbol": "HDFCBANK",
+      "yf_ticker": "HDFCBANK.NS",
+      "lot_size": 550
+    }
+  ]
+}
