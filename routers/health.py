@@ -3,7 +3,6 @@ import os
 import requests
 from fastapi import APIRouter, Header
 from auth import require_auth
-from breeze_client import get_breeze
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -41,7 +40,6 @@ def health_detailed(x_app_token: str | None = Header(default=None, alias="X-APP-
     Returns per-layer status for:
       backend   – FastAPI process (always ok if this endpoint responds)
       static_ip – outbound egress IP resolved via ipify
-      breeze_api – Breeze Connect credentials configured and session valid
     """
     require_auth(x_app_token)
 
@@ -73,37 +71,6 @@ def health_detailed(x_app_token: str | None = Header(default=None, alias="X-APP-
             "ip": None,
             "detail": str(exc),
         }
-
-    # ── 3. Breeze API ──────────────────────────────────────────────────────────
-    # Use the same get_breeze() path as quote.py and options.py so the health
-    # check exercises the identical code path that is known to work.
-    missing_vars = [
-        name
-        for name in ("BREEZE_API_KEY", "BREEZE_API_SECRET", "BREEZE_SESSION_TOKEN")
-        if not os.environ.get(name)
-    ]
-
-    if missing_vars:
-        logger.warning("BREEZE_CHECK  missing env vars: %s", missing_vars)
-        layers["breeze_api"] = {
-            "ok": False,
-            "detail": f"Missing env vars: {', '.join(missing_vars)}",
-        }
-    else:
-        try:
-            logger.info("BREEZE_CHECK  calling get_breeze() (same path as data routes)")
-            breeze = get_breeze()
-            logger.info("BREEZE_CHECK  get_breeze() succeeded")
-            layers["breeze_api"] = {
-                "ok": True,
-                "detail": "Breeze session authenticated successfully",
-            }
-        except Exception as exc:
-            logger.error("BREEZE_CHECK  get_breeze() failed: %s", exc)
-            layers["breeze_api"] = {
-                "ok": False,
-                "detail": str(exc),
-            }
 
     overall_ok = all(v["ok"] for v in layers.values())
     return {"ok": overall_ok, "layers": layers}
