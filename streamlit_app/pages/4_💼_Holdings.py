@@ -20,6 +20,19 @@ if st.button("🔄 Load Holdings", type="primary", use_container_width=False):
         st.warning("No holdings found in the account.")
         st.stop()
 
+    # ── Exchange filter ────────────────────────────────────────────────────────
+    exchanges = sorted({h.get("exchange_code", "") for h in holdings if h.get("exchange_code")})
+    selected_exchanges = st.multiselect(
+        "Filter by Exchange",
+        options=exchanges,
+        default=exchanges,
+    )
+    holdings = [h for h in holdings if h.get("exchange_code") in selected_exchanges]
+
+    if not holdings:
+        st.warning("No holdings match the selected exchange(s).")
+        st.stop()
+
     # ── Build display dataframe ────────────────────────────────────────────────
     def _f(v, decimals=2):
         try:
