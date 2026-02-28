@@ -24,3 +24,7 @@ class ChainCompareRequest(BaseModel):
     stock_code: str             # e.g. "TCS"
     right: str                  # "call" / "put"
     expiry_date: str            # single expiry
+
+
+class SessionRequest(BaseModel):
+    session_token: str          # token from ICICIDirect login URL
