@@ -76,3 +76,15 @@ def fetch_option_chain(
         "expiry_date": expiry_date,
     }
     return _post("/option_chain_compare", payload)
+
+
+def fetch_holdings() -> list[dict]:
+    url = f"{_base_url()}/holdings"
+    resp = requests.get(url, headers=_headers(), timeout=30)
+    try:
+        data = resp.json()
+    except Exception:
+        raise ValueError(f"HTTP {resp.status_code}: non-JSON response from server")
+    if resp.status_code != 200 or data.get("status") != "ok":
+        raise ValueError(data.get("error", f"HTTP {resp.status_code}"))
+    return data["holdings"]
