@@ -29,6 +29,7 @@ st.markdown("""
 |---|---|
 | 📈 **Quote Fetcher** | Fetch live prices for any stock, future, or option contract |
 | 📊 **Option Chain** | Load a full option chain with covered-call P&L metrics |
+| 💼 **Holdings** | View all demat stock holdings with P&L summary |
 | ⚙️ **Config** | Add or edit symbols, lot sizes and yfinance ticker mappings |
 """)
 
