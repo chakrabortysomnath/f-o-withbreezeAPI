@@ -15,18 +15,23 @@ def options_holdings(request: Request):
 
 
 @router.get("/holdings")
-def get_holdings(x_app_token: str | None = Header(default=None, alias="X-APP-TOKEN")):
+def get_holdings(
+    exchange_code: str = "NSE",
+    x_app_token: str | None = Header(default=None, alias="X-APP-TOKEN"),
+):
     """
     Return all portfolio (demat) holdings for the authenticated Breeze account.
 
     Each row in the response represents one position and includes the stock
     symbol, exchange, quantity held, average cost, book value, current market
     price, market value, and P&L.
+
+    - exchange_code: NSE (default, equity) or NFO (F&O) or BSE
     """
     require_auth(x_app_token)
     breeze = get_breeze()
 
-    resp = breeze.get_portfolio_holdings()
+    resp = breeze.get_portfolio_holdings(exchange_code=exchange_code.upper())
     logger.info("HOLDINGS  raw_status=%s", resp.get("Status"))
 
     rows = resp.get("Success") or []

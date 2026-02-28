@@ -8,10 +8,12 @@ require_login()
 st.title("💼 Stock Holdings")
 st.caption("All demat holdings in your Breeze / ICICIDirect account.")
 
+exchange = st.selectbox("Exchange", ["NSE", "BSE", "NFO"], index=0)
+
 if st.button("🔄 Load Holdings", type="primary", use_container_width=False):
     with st.spinner("Fetching holdings from Breeze…"):
         try:
-            holdings = fetch_holdings()
+            holdings = fetch_holdings(exchange_code=exchange)
         except Exception as e:
             st.error(f"Error: {e}")
             st.stop()

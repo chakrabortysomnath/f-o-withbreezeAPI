@@ -78,8 +78,8 @@ def fetch_option_chain(
     return _post("/option_chain_compare", payload)
 
 
-def fetch_holdings() -> list[dict]:
-    url = f"{_base_url()}/holdings"
+def fetch_holdings(exchange_code: str = "NSE") -> list[dict]:
+    url = f"{_base_url()}/holdings?exchange_code={exchange_code.upper()}"
     resp = requests.get(url, headers=_headers(), timeout=30)
     try:
         data = resp.json()
