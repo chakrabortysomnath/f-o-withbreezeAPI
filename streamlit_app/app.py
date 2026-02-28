@@ -3,9 +3,10 @@ import streamlit as st
 from utils.auth import require_login
 
 st.set_page_config(
-    page_title="Breeze Options Dashboard",
+    page_title="Breezy F&O",
     page_icon="📊",
     layout="wide",
+    menu_items={},
 )
 
 # ── Validate backend secrets early ────────────────────────────────────────────

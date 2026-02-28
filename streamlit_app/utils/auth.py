@@ -87,7 +87,7 @@ def require_login() -> None:
     # ── Login form ─────────────────────────────────────────────────────────────
     _, centre, _ = st.columns([1, 1.2, 1])
     with centre:
-        st.markdown("## 🔒 Breeze Options Dashboard")
+        st.markdown("## Breezy F&O")
         st.caption("Please log in to continue.")
 
         with st.form("login_form", clear_on_submit=True):
