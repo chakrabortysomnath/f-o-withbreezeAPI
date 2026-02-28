@@ -3,7 +3,7 @@ import os
 import requests
 from fastapi import APIRouter, Header
 from auth import require_auth
-from breeze_connect import BreezeConnect
+from breeze_client import get_breeze
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -75,37 +75,31 @@ def health_detailed(x_app_token: str | None = Header(default=None, alias="X-APP-
         }
 
     # ── 3. Breeze API ──────────────────────────────────────────────────────────
-    api_key = os.environ.get("BREEZE_API_KEY", "")
-    api_secret = os.environ.get("BREEZE_API_SECRET", "")
-    session_tok = os.environ.get("BREEZE_SESSION_TOKEN", "")
-
+    # Use the same get_breeze() path as quote.py and options.py so the health
+    # check exercises the identical code path that is known to work.
     missing_vars = [
         name
-        for name, val in (
-            ("BREEZE_API_KEY", api_key),
-            ("BREEZE_API_SECRET", api_secret),
-            ("BREEZE_SESSION_TOKEN", session_tok),
-        )
-        if not val
+        for name in ("BREEZE_API_KEY", "BREEZE_API_SECRET", "BREEZE_SESSION_TOKEN")
+        if not os.environ.get(name)
     ]
 
     if missing_vars:
+        logger.warning("BREEZE_CHECK  missing env vars: %s", missing_vars)
         layers["breeze_api"] = {
             "ok": False,
             "detail": f"Missing env vars: {', '.join(missing_vars)}",
         }
     else:
         try:
-            logger.info("BREEZE_CHECK  attempting generate_session")
-            breeze = BreezeConnect(api_key=api_key)
-            breeze.generate_session(api_secret=api_secret, session_token=session_tok)
-            logger.info("BREEZE_CHECK  session authenticated successfully")
+            logger.info("BREEZE_CHECK  calling get_breeze() (same path as data routes)")
+            breeze = get_breeze()
+            logger.info("BREEZE_CHECK  get_breeze() succeeded")
             layers["breeze_api"] = {
                 "ok": True,
                 "detail": "Breeze session authenticated successfully",
             }
         except Exception as exc:
-            logger.error("BREEZE_CHECK  failed: %s", exc)
+            logger.error("BREEZE_CHECK  get_breeze() failed: %s", exc)
             layers["breeze_api"] = {
                 "ok": False,
                 "detail": str(exc),
