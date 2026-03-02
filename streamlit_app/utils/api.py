@@ -80,6 +80,49 @@ def fetch_option_chain(
     return _post("/option_chain_compare", payload)
 
 
+def scan_covered_calls(
+    expiry_date: str,
+    holdings: list[dict],
+    otm_max_pct: float = 10.0,
+    min_premium_yield_pct: float = 0.3,
+) -> dict:
+    """
+    Call /scan/covered-calls and return the full response dict.
+    holdings should be the list returned by fetch_holdings().
+    """
+    payload = {
+        "expiry_date": expiry_date,
+        "holdings": [
+            {
+                "stock_code": h.get("stock_code", ""),
+                "quantity": h.get("quantity") or 0,
+                "average_cost": h.get("average_cost"),
+                "ltp": h.get("ltp"),
+            }
+            for h in holdings
+        ],
+        "otm_max_pct": otm_max_pct,
+        "min_premium_yield_pct": min_premium_yield_pct,
+    }
+    return _post("/scan/covered-calls", payload)
+
+
+def get_covered_call_advice(
+    scan_results: list[dict],
+    expiry_date: str,
+    risk_tolerance: str = "moderate",
+    income_goal_pct: float = 1.0,
+) -> dict:
+    """Call /agent/covered-call-advice and return the advice dict."""
+    payload = {
+        "scan_results": scan_results,
+        "expiry_date": expiry_date,
+        "risk_tolerance": risk_tolerance,
+        "income_goal_pct": income_goal_pct,
+    }
+    return _post("/agent/covered-call-advice", payload)
+
+
 def fetch_holdings(exchange_codes: list[str] | None = None) -> tuple[list[dict], dict]:
     """
     Fetch holdings for the given exchange codes.
