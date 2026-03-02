@@ -8,7 +8,7 @@ from utils import cors_preflight_response
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-SUPPORTED_EXCHANGES = ["NSE", "BSE", "NFO", "BFO", "MCX", "NCDEX"]
+SUPPORTED_EXCHANGES = ["NSE", "NFO"]
 
 
 @router.options("/holdings")
@@ -19,7 +19,6 @@ def options_holdings(request: Request):
 @router.get("/holdings")
 def get_holdings(
     exchange_code: list[str] = Query(default=["NSE", "BSE"]),
-    
     x_app_token: str | None = Header(default=None, alias="X-APP-TOKEN"),
 ):
     """
@@ -47,8 +46,7 @@ def get_holdings(
     holdings = []
     errors = {}
 
-    for exch in exchange_code:
-        logger.info("Exchange Code", exch)
+       for exch in exchange_code:
         resp = breeze.get_portfolio_holdings(exchange_code=exch)
         status = resp.get("Status")
         logger.info("HOLDINGS  exchange=%s raw_status=%s", exch, status)
@@ -59,17 +57,50 @@ def get_holdings(
             continue
 
         for r in rows:
+            # Normalize types
+            def to_float(x):
+                try:
+                    return float(x)
+                except (TypeError, ValueError):
+                    return None
+
+            qty = to_float(r.get("quantity"))
+            ltp = to_float(r.get("ltp") or r.get("current_market_price"))
+            avg_price = to_float(r.get("average_cost") or r.get("average_price"))
+
+            # Derived fields
+            book_value = qty * avg_price if qty is not None and avg_price is not None else None
+
+            # Breeze sometimes gives open_position_value, otherwise fall back
+            open_position_value = to_float(r.get("open_position_value"))
+            market_value = (
+                open_position_value
+                if open_position_value is not None
+                else (qty * ltp if qty is not None and ltp is not None else None)
+            )
+
+            realized = to_float(r.get("realized_profit"))
+            unrealized = to_float(r.get("unrealized_profit"))
+            pnl = None
+            if realized is not None or unrealized is not None:
+                pnl = (realized or 0.0) + (unrealized or 0.0)
+
+            pnl_percent = None
+            if pnl is not None and book_value not in (None, 0):
+                pnl_percent = pnl / book_value * 100.0
+
             holdings.append({
                 "stock_code":     r.get("stock_code"),
                 "exchange_code":  r.get("exchange_code") or exch,
-                "quantity":       r.get("quantity"),
-                "average_cost":   r.get("average_cost"),
-                "book_value":     r.get("book_value"),
-                "ltp":            r.get("ltp") or r.get("current_market_price"),
-                "market_value":   r.get("market_value"),
-                "pnl":            r.get("pnl") or r.get("profit_loss"),
-                "pnl_percent":    r.get("pnl_percentage") or r.get("profit_loss_percentage"),
+                "quantity":       qty,
+                "average_cost":   avg_price,
+                "book_value":     book_value,
+                "ltp":            ltp,
+                "market_value":   market_value,
+                "pnl":            pnl,
+                "pnl_percent":    pnl_percent,
                 "product_type":   r.get("product_type"),
+                # Breeze doesn't really have portfolio_name in this API; keep None or derive elsewhere
                 "portfolio_name": r.get("portfolio_name"),
                 "raw":            r,
             })
