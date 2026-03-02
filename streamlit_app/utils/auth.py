@@ -61,13 +61,14 @@ def _show_setup_form() -> None:
                 )
 
 
-def require_login() -> None:
+def require_login(sidebar_logout: bool = False) -> None:
     """
     Call at the top of every page (after set_page_config).
 
     - Auth secrets missing  → shows first-time setup form, then st.stop()
     - Not authenticated     → shows login form, then st.stop()
-    - Authenticated         → adds Logout to the sidebar and returns
+    - Authenticated         → returns (sidebar_logout=True adds a legacy
+                              sidebar logout button for old individual pages)
     """
     # ── First-time setup ───────────────────────────────────────────────────────
     missing = [k for k in _REQUIRED_SECRETS if k not in st.secrets]
@@ -77,11 +78,12 @@ def require_login() -> None:
 
     # ── Already logged in ──────────────────────────────────────────────────────
     if st.session_state.get("authenticated"):
-        with st.sidebar:
-            st.divider()
-            if st.button("🚪 Logout", use_container_width=True):
-                st.session_state.clear()
-                st.rerun()
+        if sidebar_logout:
+            with st.sidebar:
+                st.divider()
+                if st.button("🚪 Logout", use_container_width=True):
+                    st.session_state.clear()
+                    st.rerun()
         return
 
     # ── Login form ─────────────────────────────────────────────────────────────
