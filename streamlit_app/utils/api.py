@@ -15,9 +15,9 @@ def _headers() -> dict:
     }
 
 
-def _post(path: str, payload: dict) -> dict:
+def _post(path: str, payload: dict, timeout: int = 30) -> dict:
     url = f"{_base_url()}{path}"
-    resp = requests.post(url, json=payload, headers=_headers(), timeout=30)
+    resp = requests.post(url, json=payload, headers=_headers(), timeout=timeout)
     try:
         data = resp.json()
     except Exception:
@@ -120,7 +120,7 @@ def get_covered_call_advice(
         "risk_tolerance": risk_tolerance,
         "income_goal_pct": income_goal_pct,
     }
-    return _post("/agent/covered-call-advice", payload)
+    return _post("/agent/covered-call-advice", payload, timeout=120)
 
 
 def fetch_holdings(exchange_codes: list[str] | None = None) -> tuple[list[dict], dict]:
