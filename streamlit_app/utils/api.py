@@ -78,13 +78,20 @@ def fetch_option_chain(
     return _post("/option_chain_compare", payload)
 
 
-def fetch_holdings() -> list[dict]:
+def fetch_holdings(exchange_codes: list[str] | None = None) -> tuple[list[dict], dict]:
+    """
+    Fetch holdings for the given exchange codes.
+
+    Returns (holdings_list, exchange_errors) where exchange_errors is a dict
+    of {exchange: raw_error_response} for any exchange that returned no data.
+    """
+    params = [("exchange_code", e) for e in (exchange_codes or ["NSE", "BSE"])]
     url = f"{_base_url()}/holdings"
-    resp = requests.get(url, headers=_headers(), timeout=30)
+    resp = requests.get(url, headers=_headers(), params=params, timeout=30)
     try:
         data = resp.json()
     except Exception:
         raise ValueError(f"HTTP {resp.status_code}: non-JSON response from server")
     if resp.status_code != 200 or data.get("status") != "ok":
         raise ValueError(data.get("error", f"HTTP {resp.status_code}"))
-    return data["holdings"]
+    return data["holdings"], data.get("exchange_errors", {})
