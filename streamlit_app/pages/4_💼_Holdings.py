@@ -5,7 +5,7 @@ from utils.auth import require_login
 
 st.set_page_config(page_title="Holdings", page_icon="💼", layout="wide")
 require_login()
-st.title("💼 Stock Holdings")
+st.title("💼 My Stock Holdings")
 st.caption("All demat holdings in your Breeze / ICICIDirect account.")
 
 if st.button("🔄 Load Holdings", type="primary", use_container_width=False):
