@@ -6,7 +6,7 @@ from utils.auth import require_login
 st.set_page_config(page_title="My Stock Holdings", page_icon="💼", layout="wide")
 require_login()
 st.title("💼 My Stock Holdings")
-st.caption("Demat holdings from your Breeze / ICICIDirect account across selected exchanges.")
+
 
 EXCHANGES = ["NSE", "BSE", "NFO", "BFO", "MCX", "NCDEX"]
 
