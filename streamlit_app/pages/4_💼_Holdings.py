@@ -27,10 +27,6 @@ if load:
         st.warning("Please select at least one exchange.")
         st.stop()
     with st.spinner(f"Fetching holdings for {', '.join(selected_exchanges)}…"):
-st.caption("All demat holdings in your Breeze / ICICIDirect account.")
-
-if st.button("🔄 Load Holdings", type="primary", use_container_width=False):
-    with st.spinner("Fetching holdings from Breeze…"):
         try:
             holdings, exchange_errors = fetch_holdings(selected_exchanges)
             st.session_state["holdings_data"] = holdings
@@ -39,7 +35,7 @@ if st.button("🔄 Load Holdings", type="primary", use_container_width=False):
             st.error(f"Error: {e}")
             st.stop()
 
-    if not holdings:
+    if not st.session_state.get("holdings_data"):
         st.warning("No holdings found for the selected exchange(s).")
         st.stop()
 
