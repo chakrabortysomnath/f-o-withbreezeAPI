@@ -51,6 +51,12 @@ with col_ctrl:
             min_value=0.1, max_value=5.0, value=1.0, step=0.1,
             help="Monthly income target as % of portfolio value (for Claude context)",
         )
+        st.divider()
+        bypass_claude = st.checkbox(
+            "Bypass Claude Analysis",
+            value=True,
+            help="When checked, Step 3 is skipped and no Anthropic API credits are used.",
+        )
 
 # ── Main content ───────────────────────────────────────────────────────────────
 with col_main:
@@ -242,21 +248,44 @@ with col_main:
 
     # ── Step 3: Claude analysis ────────────────────────────────────────────────
     st.subheader("Step 3 — Claude Analysis")
-    st.caption("Claude will rank the best covered call trades and identify accumulation priorities.")
 
-    if st.button("🤖 Get Claude's Recommendations", type="primary"):
-        with st.spinner("Calling Claude (claude-sonnet-4-6)…"):
-            try:
-                advice_resp = get_covered_call_advice(
-                    scan_results=results,
-                    expiry_date=expiry_date,
-                    risk_tolerance=risk_tolerance,
-                    income_goal_pct=income_goal,
-                )
-                st.session_state["cc_advice"] = advice_resp.get("advice", {})
-            except Exception as e:
-                st.error(f"Claude call failed: {e}")
-                st.stop()
+    if bypass_claude:
+        st.info(
+            "Claude analysis is **bypassed**. "
+            "Uncheck **Bypass Claude Analysis** in ⚙️ Advanced Settings to enable."
+        )
+    else:
+        st.caption("Claude will rank the best covered call trades and identify accumulation priorities.")
+
+        # ── Confirmation gate ──────────────────────────────────────────────────
+        if st.button("🤖 Get Claude's Recommendations", type="primary"):
+            st.session_state["cc_confirm_pending"] = True
+
+        if st.session_state.get("cc_confirm_pending"):
+            st.warning(
+                "This will call the **Anthropic Claude API** and consume API credits "
+                "(approx. ₹2–3 per call). Proceed?"
+            )
+            col_yes, col_no, _ = st.columns([1, 1, 5])
+            with col_yes:
+                if st.button("✅ Yes, call Claude", use_container_width=True):
+                    st.session_state["cc_confirm_pending"] = False
+                    with st.spinner("Calling Claude (claude-sonnet-4-6)…"):
+                        try:
+                            advice_resp = get_covered_call_advice(
+                                scan_results=results,
+                                expiry_date=expiry_date,
+                                risk_tolerance=risk_tolerance,
+                                income_goal_pct=income_goal,
+                            )
+                            st.session_state["cc_advice"] = advice_resp.get("advice", {})
+                        except Exception as e:
+                            st.error(f"Claude call failed: {e}")
+                            st.stop()
+            with col_no:
+                if st.button("❌ Cancel", use_container_width=True):
+                    st.session_state["cc_confirm_pending"] = False
+                    st.rerun()
 
     advice = st.session_state.get("cc_advice")
     if advice:
