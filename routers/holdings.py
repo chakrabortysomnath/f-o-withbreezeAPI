@@ -19,6 +19,7 @@ def options_holdings(request: Request):
 @router.get("/holdings")
 def get_holdings(
     exchange_code: list[str] = Query(default=["NSE", "BSE"]),
+    
     x_app_token: str | None = Header(default=None, alias="X-APP-TOKEN"),
 ):
     """
@@ -47,6 +48,7 @@ def get_holdings(
     errors = {}
 
     for exch in exchange_code:
+        logger.info("Exchange Code", exch)
         resp = breeze.get_portfolio_holdings(exchange_code=exch)
         status = resp.get("Status")
         logger.info("HOLDINGS  exchange=%s raw_status=%s", exch, status)
