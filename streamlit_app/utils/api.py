@@ -107,6 +107,32 @@ def scan_covered_calls(
     return _post("/scan/covered-calls", payload)
 
 
+def scan_decision_desk(
+    expiry_date: str,
+    holdings: list[dict],
+) -> dict:
+    """
+    Call /scan/decision-desk and return the full raw response dict.
+    Fetches option chains for all 50 Nifty stocks. Holdings provide
+    position context (avg_cost, held_qty, ltp).
+    Timeout is 180 s to accommodate serial chain fetching for 50 stocks.
+    """
+    payload = {
+        "expiry_date": expiry_date,
+        "holdings": [
+            {
+                "stock_code": h.get("stock_code", ""),
+                "quantity": h.get("quantity") or 0,
+                "average_cost": h.get("average_cost"),
+                "ltp": h.get("ltp"),
+            }
+            for h in holdings
+        ],
+        "fetch_all": True,
+    }
+    return _post("/scan/decision-desk", payload, timeout=180)
+
+
 def get_covered_call_advice(
     scan_results: list[dict],
     expiry_date: str,

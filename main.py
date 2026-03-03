@@ -4,7 +4,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import health, quote, options, holdings, scanner, agent
+from routers import health, quote, options, holdings, scanner, agent, decision_desk
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -43,3 +43,4 @@ app.include_router(options.router)
 app.include_router(holdings.router)
 app.include_router(scanner.router)
 app.include_router(agent.router)
+app.include_router(decision_desk.router)

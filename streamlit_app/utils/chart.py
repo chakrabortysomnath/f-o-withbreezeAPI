@@ -7,6 +7,28 @@ import yfinance as yf
 
 
 @st.cache_data(ttl=3600)
+def fetch_hv30(yf_ticker: str) -> float | None:
+    """
+    Compute 30-trading-day annualised historical volatility for a yfinance ticker.
+    Returns the value as a percentage (e.g. 28.5 means 28.5% annualised HV).
+    Returns None if data is unavailable or ticker is empty.
+    Used as an IV proxy since Breeze API does not provide Greeks.
+    """
+    if not yf_ticker:
+        return None
+    try:
+        import numpy as np
+        df = yf.Ticker(yf_ticker).history(period="45d", interval="1d")
+        if df.empty or len(df) < 10:
+            return None
+        closes = df["Close"].dropna()
+        log_rets = np.log(closes / closes.shift(1)).dropna()
+        return round(float(log_rets.std() * np.sqrt(252) * 100), 2)
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=3600)
 def _fetch_ohlc(yf_ticker: str) -> pd.DataFrame:
     df = yf.Ticker(yf_ticker).history(period="30d", interval="1d")
     return df.reset_index()
