@@ -135,16 +135,21 @@ def render_home() -> None:
     qcol1, qcol2, qcol3 = st.columns([1, 2, 1])
 
     with qcol1:
-        exchange = st.selectbox("Exchange", ["NSE", "NFO", "BFO"], key="hq_exchange")
+        exchange = st.selectbox("Exchange", ["NSE", "BSE", "NFO", "BFO"], key="hq_exchange")
         is_fno = exchange in ("NFO", "BFO")
+        # Cash equities only exist on NSE/BSE; NFO/BFO carry futures & options only
         product_type = st.selectbox(
             "Product Type",
-            ["cash", "futures", "options"] if is_fno else ["cash"],
+            ["futures", "options"] if is_fno else ["cash"],
             key="hq_product",
         )
 
     with qcol2:
-        symbol = st.selectbox("Symbol", get_symbols(), key="hq_symbol")
+        all_syms = get_symbols()
+        # Index symbols (NIFTY/BANKNIFTY/FINNIFTY) only trade on NFO/BFO, not NSE/BSE cash
+        INDEX_SYMS = {"NIFTY", "BANKNIFTY", "FINNIFTY"}
+        filtered_syms = all_syms if is_fno else [s for s in all_syms if s not in INDEX_SYMS]
+        symbol = st.selectbox("Symbol", filtered_syms, key="hq_symbol")
 
     with qcol3:
         expiry_date = ""
