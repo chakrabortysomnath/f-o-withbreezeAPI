@@ -6,6 +6,7 @@ from views.home_view import render_home
 from views.portfolio_view import render_portfolio
 from views.covered_calls_view import render_covered_calls
 from views.config_view import render_config
+from views.decision_desk_view import render_decision_desk
 
 st.set_page_config(
     page_title="Breezy F&O",
@@ -32,10 +33,11 @@ require_login(sidebar_logout=False)
 render_header()
 
 # ── Top navigation tabs ────────────────────────────────────────────────────────
-tab_home, tab_portfolio, tab_cc, tab_config = st.tabs([
+tab_home, tab_portfolio, tab_cc, tab_dd, tab_config = st.tabs([
     "🏠 Home",
     "💼 Portfolio",
     "🎯 Covered Call Analyser",
+    "🏦 Decision Desk",
     "⚙️ Configuration",
 ])
 
@@ -47,6 +49,9 @@ with tab_portfolio:
 
 with tab_cc:
     render_covered_calls()
+
+with tab_dd:
+    render_decision_desk()
 
 with tab_config:
     render_config()

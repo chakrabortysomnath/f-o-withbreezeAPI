@@ -24,6 +24,11 @@ def get_symbols() -> list[str]:
     return [s["nfo_symbol"] for s in load_config()["symbols"]]
 
 
+def get_dd_config() -> dict:
+    """Return the decision_desk configuration block from config.json."""
+    return load_config().get("decision_desk", {})
+
+
 def get_symbol_info(nfo_symbol: str) -> dict | None:
     for s in load_config()["symbols"]:
         if s["nfo_symbol"] == nfo_symbol:
