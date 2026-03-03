@@ -34,7 +34,11 @@ def quote(req: QuoteRequest, x_app_token: str | None = Header(default=None, alia
 
     rows = resp.get("Success") or []
     if not rows:
-        return {"status": "error", "error": resp}
+        return {
+            "status": "error",
+            "error": resp.get("Error") or resp,
+            "attempted": {k: params[k] for k in ("stock_code", "exchange_code", "product_type")},
+        }
 
     r = rows[0]
 
