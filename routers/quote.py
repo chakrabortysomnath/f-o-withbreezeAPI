@@ -17,18 +17,24 @@ def quote(req: QuoteRequest, x_app_token: str | None = Header(default=None, alia
     require_auth(x_app_token)
     breeze = get_breeze()
 
-    params = {
-        "stock_code": req.stock_code.strip().upper(),
-        "exchange_code": req.exchange_code.strip().upper(),
-        "product_type": (req.product_type or "cash").strip().lower(),
-    }
+    product_type = (req.product_type or "cash").strip().lower()
 
-    if req.expiry_date:
-        params["expiry_date"] = req.expiry_date
-    if req.strike_price:
-        params["strike_price"] = str(req.strike_price)
-    if req.right:
-        params["right"] = req.right
+    # Breeze get_quotes() requires ALL parameters to be passed explicitly.
+    # Omitting optional fields causes "Check stock code" even for valid symbols.
+    # For cash equities, right must be "others" — not blank, not omitted.
+    if product_type == "cash":
+        right = "others"
+    else:
+        right = req.right or ""
+
+    params = {
+        "stock_code":   req.stock_code.strip().upper(),
+        "exchange_code": req.exchange_code.strip().upper(),
+        "product_type": product_type,
+        "expiry_date":  req.expiry_date or "",
+        "strike_price": str(req.strike_price) if req.strike_price else "",
+        "right":        right,
+    }
 
     resp = breeze.get_quotes(**params)
 
@@ -37,7 +43,7 @@ def quote(req: QuoteRequest, x_app_token: str | None = Header(default=None, alia
         return {
             "status": "error",
             "error": resp.get("Error") or resp,
-            "attempted": {k: params[k] for k in ("stock_code", "exchange_code", "product_type")},
+            "attempted": {k: params[k] for k in ("stock_code", "exchange_code", "product_type", "right", "expiry_date")},
         }
 
     r = rows[0]
